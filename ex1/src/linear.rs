@@ -187,7 +187,7 @@ impl Linear {
     //  返り値は回帰式にxを当てはめた値(=予測値)
     // ============================================================
     pub fn predict(&self, x: &U::Matrix, normalized: bool) -> Vec<f64> {
-        let mut nx: U::Matrix;
+        let nx: U::Matrix;
         if !normalized {
             // 正規化されていないので、正規化する
             let dummy = U::Matrix::new();
