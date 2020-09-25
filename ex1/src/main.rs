@@ -19,66 +19,57 @@ use std::env;
 mod U;  // 「main.rsからU.rs内のpub要素を使う」の意味
 mod zeror;
 mod linear;
+mod dtree;
 
-fn zeroRuleTest(filePath: &String) {
-    let mut csv = U::CSV::new();
-
-    let result = csv.read(filePath); // 読み込み
-    if result.is_err() {
-        println!("load error {}", filePath);
-        return;
-    }
-
+fn zeroRuleTest(x: &U::Matrix, y: &U::Matrix) {
     let mut z = zeror::ZeroRule::new();
 
-    let ncol = csv.cols.len();
-
-    // 説明変数を取り出す
-    let x = csv.clonePartial(0, ncol-1);
-    // println!("**** x ****");
-    // U::printMat(&x.cols);
-
-    // 目的変数を取り出す
-    let y = csv.clonePartial(ncol-1, ncol);
-    // println!("**** y ****");
-    // U::printMat(&y.cols);
-
     // モデル作成
-    z.fit(&x.cols, &y.cols);
+    z.fit(&x, &y);
 
     // 予測
-    let result = z.predict(&x.cols);
+    let result = z.predict(&x);
 
     // 結果表示
+    println!("*** ZeroRule output ***");
     println!("{:?}", result);
 }
 
-fn linearTest(filePath: &String) {
-    let mut csv = U::CSV::new();
-
-    let result = csv.read(filePath); // 読み込み
-    if result.is_err() {
-        println!("load error {}", filePath);
-        return;
-    }
-
-    let ncol = csv.cols.len();
-
-    // 説明変数を取り出す
-    let x = csv.clonePartial(0, ncol-1);
-
-    // 目的変数を取り出す
-    let y = csv.clonePartial(ncol-1, ncol);
-
+fn linearTest(x: &U::Matrix, y: &U::Matrix) {
     let mut l = linear::Linear::new();
 
     // モデル作成
-    l.fit(&x.cols, &y.cols);
+    l.fit(&x, &y);
 
     // 予測
-    let result: Vec<f64> = l.predict(&x.cols, false);
+    let result: Vec<f64> = l.predict(&x, false);
 
+    println!("*** Linear output ***");
     println!("{:?}", result);
+}
+
+fn decisionTreeTest(x: &U::Matrix, y: &U::Matrix) {
+    let mut d = dtree::DecisionTree::new(1);
+
+    // d.test1(&x, &y);
+    // d.test_make_split(&x, &y);
+    // d.test_split_tree(&x, &y);
+    d.fit(&x, &y);
+    d.print();
+
+    // U::stdev()のテスト
+    // let v: &Vec<f64> = &x[0];
+    // let sd = U::stdev(&v);
+    // println!("sd={}", sd);
+
+    // モデル作成
+    // d.fit(&x, &y);
+
+    // 予測
+    // let result: Vec<f64> = d.predict(&x, false);
+
+    // println!("*** DecisionTree output ***");
+    // println!("{:?}", result);
 }
 
 fn main() {
@@ -89,8 +80,29 @@ fn main() {
     }
     let filePath = &args[1];
 
-    // zeroRuleTest(&filePath);
-    linearTest(filePath);
+    let mut csv = U::CSV::new();
+
+    let result = csv.read(filePath); // 読み込み
+    if result.is_err() {
+        println!("load error {}", filePath);
+        return;
+    }
+
+    let ncol = csv.cols.len();
+
+    // 説明変数を取り出す
+    let x = csv.clonePartial(0, ncol-1).cols;
+    // println!("**** x ****");
+    // U::printMat(&x);
+
+    // 目的変数を取り出す
+    let y = csv.clonePartial(ncol-1, ncol).cols;
+    // println!("**** y ****");
+    // U::printMat(&y);
+
+    // zeroRuleTest(&x, &y);
+    // linearTest(&x, &y);
+    decisionTreeTest(&x, &y);
 }
 
 /******* Sample run *******
