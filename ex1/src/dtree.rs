@@ -57,13 +57,12 @@ pub struct DecisionTree {
 }
 
 enum NodeType {
-    // Node(&'a DecisionTree<'a>),
     Node(Box<DecisionTree>),
     Leaf(Box<linear::Linear>)
 }
 
 impl DecisionTree {
-    pub fn new(depth: u32) -> Self {
+    pub fn new(depth: u32, max_depth: u32) -> Self {
         let l = linear::Linear::new();
         let r = linear::Linear::new();
 
@@ -75,7 +74,7 @@ impl DecisionTree {
             feat_val: f64::NAN,
             score: f64::NAN,
             depth: depth,
-            max_depth: 3
+            max_depth: max_depth
         }
     }
 
@@ -163,9 +162,9 @@ impl DecisionTree {
         let mut right: Vec<usize> = vec![];
 
         // 以下を求める
-		// (1) self.feat_index : 分割対象変数（の列番号）
-		// (2) self.feat_val : 分割の基準値
-		// (3) left : 左側の枝に入れる行（の行番号）
+        // (1) self.feat_index : 分割対象変数（の列番号）
+        // (2) self.feat_val : 分割の基準値
+        // (3) left : 左側の枝に入れる行（の行番号）
         // (4) right : 右側の枝に入れる行（の行番号）
         for i in 0..ncol {
             let feat: &Vec<f64> = &x[i]; // i列目のベクトル
@@ -193,16 +192,16 @@ impl DecisionTree {
         (left, right)
     }
 
-    pub fn fit(&mut self, x: &U::Matrix, y: &U::Matrix) -> &Self {
+    pub fn fit(&mut self, x: &U::Matrix, y: &U::Matrix, max_depth: u32) -> &Self {
         let (left, right) = self.split_tree(&x, &y);
 
         if self.depth < self.max_depth {
             if left.len() > 0 {
-                self.left = NodeType::Node(Box::new(DecisionTree::new(self.depth+1)));
+                self.left = NodeType::Node(Box::new(DecisionTree::new(self.depth+1, max_depth)));
             }
 
             if right.len() > 0 {
-                self.right = NodeType::Node(Box::new(DecisionTree::new(self.depth+1)));
+                self.right = NodeType::Node(Box::new(DecisionTree::new(self.depth+1, max_depth)));
             }
         }
 
@@ -210,7 +209,7 @@ impl DecisionTree {
             let xl: U::Matrix = U::MatSelectRow(x, &left);
             let yl: U::Matrix = U::MatSelectRow(y, &left);
             match self.left {
-                NodeType::Node(ref mut node) => { node.fit(&xl, &yl); },
+                NodeType::Node(ref mut node) => { node.fit(&xl, &yl, max_depth); },
                 NodeType::Leaf(ref mut leaf) => { leaf.fit(&xl, &yl); }
             }
         }
@@ -219,12 +218,54 @@ impl DecisionTree {
             let xr: U::Matrix = U::MatSelectRow(x, &right);
             let yr: U::Matrix = U::MatSelectRow(y, &right);
             match self.right {
-                NodeType::Node(ref mut node) => { node.fit(&xr, &yr); },
+                NodeType::Node(ref mut node) => { node.fit(&xr, &yr, max_depth); },
                 NodeType::Leaf(ref mut leaf) => { leaf.fit(&xr, &yr); }
             }
         }
 
         self
+    }
+
+    pub fn predict(&self, x: &U::Matrix) -> Vec<f64> {
+        let feat: &Vec<f64> = &x[self.feat_index];
+        let val: f64 = self.feat_val;
+        let (l, r) = self.make_split(feat, val);
+
+        let nrow = x[0].len();
+        let mut z: Vec<f64> = vec![0.0; nrow];    // 中身が0.0で長さnrowのベクトル
+
+        if (l.len() > 0) && (r.len() > 0) {
+            let xl: U::Matrix = U::MatSelectRow(x, &l);
+            let left = match self.left {
+                NodeType::Node(ref node) => { node.predict(&xl) },
+                NodeType::Leaf(ref leaf) => { leaf.predict(&xl, false) }
+            };
+
+            let xr: U::Matrix = U::MatSelectRow(x, &r);
+            let right = match self.right {
+                NodeType::Node(ref node) => { node.predict(&xr) },
+                NodeType::Leaf(ref leaf) => { leaf.predict(&xr, false) }
+            };
+
+            for i in 0..l.len() {
+                z[l[i]] = left[i];
+            }
+            for i in 0..r.len() {
+                z[r[i]] = right[i];
+            }
+        } else if l.len() > 0 {
+            z = match self.left {
+                NodeType::Node(ref node) => { node.predict(&x) },
+                NodeType::Leaf(ref leaf) => { leaf.predict(&x, false) }
+            }
+        } else if r.len() > 0 {
+            z = match self.right {
+                NodeType::Node(ref node) => { node.predict(&x) },
+                NodeType::Leaf(ref leaf) => { leaf.predict(&x, false) }
+            }
+        }
+
+        z
     }
 
     pub fn test_make_split(&self, x: &U::Matrix, y: &U::Matrix) {

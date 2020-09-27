@@ -1,7 +1,7 @@
 // ************************************************
 //  アンサンブル学習アルゴリズム入門 Rust移植版
 //
-//  2020/09/19
+//  2020/09/27
 // ************************************************
 // suppress for the whole module with inner attribute...
 #![allow(non_snake_case)]
@@ -48,40 +48,45 @@ fn linearTest(x: &U::Matrix, y: &U::Matrix) {
     println!("{:?}", result);
 }
 
-fn decisionTreeTest(x: &U::Matrix, y: &U::Matrix) {
-    let mut d = dtree::DecisionTree::new(1);
+fn decisionTreeTest(x: &U::Matrix, y: &U::Matrix, max_depth: u32) {
+    let mut d = dtree::DecisionTree::new(1, max_depth);
 
-    // d.test1(&x, &y);
-    // d.test_make_split(&x, &y);
-    // d.test_split_tree(&x, &y);
-    d.fit(&x, &y);
+    // モデル作成
+    d.fit(&x, &y, max_depth);
     d.print();
+
+    // 予測
+    let result = d.predict(&x);
+    println!("*** DecisionTree output ***");
+    println!("{:?}", result);
 
     // U::stdev()のテスト
     // let v: &Vec<f64> = &x[0];
     // let sd = U::stdev(&v);
     // println!("sd={}", sd);
 
-    // モデル作成
-    // d.fit(&x, &y);
-
-    // 予測
-    // let result: Vec<f64> = d.predict(&x, false);
-
-    // println!("*** DecisionTree output ***");
-    // println!("{:?}", result);
+    // d.test1(&x, &y);
+    // d.test_make_split(&x, &y);
+    // d.test_split_tree(&x, &y);
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len()<2 {
-        println!("usage {} csvFile", args[0]);
+        println!("usage {} csvFile [-d max_depth]", args[0]);
         return;
     }
     let filePath = &args[1];
 
-    let mut csv = U::CSV::new();
+    let mut max_depth: u32 = 3; // default value
+    if args.len()>2 {
+        if &args[2] == "-d" {
+            max_depth = args[3].parse::<u32>().unwrap();
+        }
+    }
 
+    let mut csv = U::CSV::new();
+    
     let result = csv.read(filePath); // 読み込み
     if result.is_err() {
         println!("load error {}", filePath);
@@ -102,9 +107,9 @@ fn main() {
 
     // zeroRuleTest(&x, &y);
     // linearTest(&x, &y);
-    decisionTreeTest(&x, &y);
+    decisionTreeTest(&x, &y, max_depth);
 }
 
 /******* Sample run *******
-> cargo run winequality-red-small.csv
+> cargo run winequality-red-mid.csv -d 3
 */
