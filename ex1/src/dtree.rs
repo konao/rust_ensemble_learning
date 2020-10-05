@@ -18,6 +18,9 @@ enum Model {
 // メトリック関数の型定義
 type Metric = fn(&U::Matrix) -> f64;
 
+// =====================================================
+//  gini impurity（ジニ不純物）を計算
+//
 //  y ... カテゴリ変数を水準ごとの確率値で表した行列
 //  (ex) irisの場合：
 //  y = array([[1., 0., 0.],
@@ -27,23 +30,33 @@ type Metric = fn(&U::Matrix) -> f64;
 //  			...
 // 			[0., 1., 0.],
 // 	        [0., 0., 1.]])
+//
+//  @return ジニ不純物値
+// =====================================================
 pub fn gini(y: &U::Matrix) -> f64 {
     let size = y[0].len();  // 行数
 
     // yの各水準の割合 --> e
     let e = y.iter()    // 列でループ
         .map(|col| col.iter().sum())    // 各列の合計を取る
-        .map(|x: f64| (x/(size as f64)).powf(2.0))  // 割合の2乗に変換
-        .sum::<f64>();  // 各列の水準の割合の二乗和
+        .map(|x: f64| (x/(size as f64)).powf(2.0))  // 行数で割ると水準の確率になる．さらにそれを2乗
+        .sum::<f64>();  // 各列の水準の確率の二乗和
     
     1.0 - e
 }
 
+// ==============================================
+//  標準偏差を計算
+//
 //  y ... 数値列(1列)
+// ==============================================
 pub fn deviation(y: &U::Matrix) -> f64 {
     U::stdev(&y[0])
 }
 
+// =================================================
+//  決定木モデル
+// =================================================
 pub struct DecisionTree {
     metric: Metric,
     // leaf: Model,
@@ -57,8 +70,8 @@ pub struct DecisionTree {
 }
 
 enum NodeType {
-    Node(Box<DecisionTree>),
-    Leaf(Box<linear::Linear>)
+    Node(Box<DecisionTree>),    // 末端でない（分岐する）所
+    Leaf(Box<linear::Linear>)   // ツリーの末端
 }
 
 impl DecisionTree {
@@ -103,6 +116,16 @@ impl DecisionTree {
         }
     }
 
+    // ============================================================
+    // ベクトルを基準値より小さいものと、それ以外とに分ける
+    //
+    // @param feat 数値ベクトル
+    // @param val 分割基準値
+    //
+    // @return (left, right)
+    // left = valより小さい値
+    // right = val以上の値
+    // ============================================================
     pub fn make_split(&self, feat: &Vec<f64>, val: f64) -> (Vec<usize>, Vec<usize>) {
         let mut left = Vec::<usize>::new();
         let mut right = Vec::<usize>::new();
@@ -118,13 +141,15 @@ impl DecisionTree {
         (left, right)
     }
 
+    // ============================================================
     // 損失関数
     //
-    // @param f メトリック関数
+    // @param self.metric メトリック関数
     // @param y1
     // @param y2
     //
     // @return 損失値
+    // ============================================================
     pub fn make_loss(&self, y1: &U::Matrix, y2: &U::Matrix) -> f64 {
         let nrow_y1 = y1[0].len();
         let nrow_y2 = y2[0].len();
@@ -148,10 +173,23 @@ impl DecisionTree {
         m1 + m2
     }
 
+    // ============================================================
+    //  データを分割する列を決める．
+    //  同時に分割基準値と、分割する際の行番号を求める
+    //
+    //  @param x 説明変数
+    //  @param y 目的変数
+    //
+    //  @return (left, right)
+    //  left .. 左側の枝に入れる行（の行番号）
+    //  right .. 右側の枝に入れる行（の行番号）
+    //
+    //  self.feat_index 分割対象変数（の列番号）
+    //  self.feat_val   分割の基準値
+    // ============================================================
     pub fn split_tree(&mut self, x: &U::Matrix, y: &U::Matrix) -> (Vec<usize>, Vec<usize>) {
         self.feat_index = 0;
         self.feat_val = f64::INFINITY;
-        let mut score = f64::INFINITY;
 
         // xの行数、列数を得る
         let ncol = x.len();
@@ -166,19 +204,20 @@ impl DecisionTree {
         // (2) self.feat_val : 分割の基準値
         // (3) left : 左側の枝に入れる行（の行番号）
         // (4) right : 右側の枝に入れる行（の行番号）
-        for i in 0..ncol {
+        let mut score = f64::INFINITY;
+        for i in 0..ncol {  // xの全列についてループ
             let feat: &Vec<f64> = &x[i]; // i列目のベクトル
-            for val in feat.iter() {
-                let (l, r) = self.make_split(feat, *val);
-                let y1: U::Matrix = U::MatSelectRow(y, &l);
-                let y2: U::Matrix = U::MatSelectRow(y, &r);
-                let loss = self.make_loss(&y1, &y2);
+            for val in feat.iter() {    // featの要素1個ずつについてループ
+                let (l, r) = self.make_split(feat, *val);   // featをvalで分割 --> (l, r)
+                let y1: U::Matrix = U::MatSelectRow(y, &l); // yのl行目を取り出す --> y1
+                let y2: U::Matrix = U::MatSelectRow(y, &r); // yのr行目を取り出す --> y2
+                let loss = self.make_loss(&y1, &y2);    // y1, y2から損失値を計算
                 // println!("-------------------");
                 // println!("i={}, val={}", i, val);
                 // println!("l={:?}", l);
                 // println!("r={:?}", r);
                 // println!("loss={}", loss);
-                if loss < score {
+                if loss < score {   // 最小の損失値を探す
                     score = loss;
                     left = l;
                     right = r;
@@ -192,33 +231,47 @@ impl DecisionTree {
         (left, right)
     }
 
+    // ============================================================
+    //  モデルを構築する
+    // ============================================================
     pub fn fit(&mut self, x: &U::Matrix, y: &U::Matrix, max_depth: u32) -> &Self {
+        // x, yを最も上手く分割する仕方 --> (left, right)
+        // left ... 左側の枝に入れる行番号
+        // right ... 右側の枝に入れる行番号
         let (left, right) = self.split_tree(&x, &y);
 
         if self.depth < self.max_depth {
             if left.len() > 0 {
+                // まだ最大深度に達していない、かつ左側に分割する行がある --> self.leftを新しいノードに置き換える
                 self.left = NodeType::Node(Box::new(DecisionTree::new(self.depth+1, max_depth)));
             }
 
             if right.len() > 0 {
+                // まだ最大深度に達していない、かつ右側に分割する行がある --> self.rightを新しいノードに置き換える
                 self.right = NodeType::Node(Box::new(DecisionTree::new(self.depth+1, max_depth)));
             }
         }
 
         if left.len() > 0 {
+            // x, yから左側の枝に入れるデータを取り出す --> xl, yl
             let xl: U::Matrix = U::MatSelectRow(x, &left);
             let yl: U::Matrix = U::MatSelectRow(y, &left);
             match self.left {
+                // self.leftがノード --> 再帰的にfit()をコール
                 NodeType::Node(ref mut node) => { node.fit(&xl, &yl, max_depth); },
+                // self.leftがリーフ（末端） --> 線形モデルでfitさせる
                 NodeType::Leaf(ref mut leaf) => { leaf.fit(&xl, &yl); }
             }
         }
 
         if right.len() > 0 {
+            // x, yから右側の枝に入れるデータを取り出す --> xr, yr
             let xr: U::Matrix = U::MatSelectRow(x, &right);
             let yr: U::Matrix = U::MatSelectRow(y, &right);
             match self.right {
+                // self.rightがノード --> 再帰的にfit()をコール
                 NodeType::Node(ref mut node) => { node.fit(&xr, &yr, max_depth); },
+                // self.rightがリーフ（末端） --> 線形モデルでfitさせる
                 NodeType::Leaf(ref mut leaf) => { leaf.fit(&xr, &yr); }
             }
         }
@@ -226,7 +279,12 @@ impl DecisionTree {
         self
     }
 
+    // ============================================================
+    //  予測値を計算する
+    // ============================================================
     pub fn predict(&self, x: &U::Matrix) -> Vec<f64> {
+        // self.feat_index .. このノードでの分割対象列
+        // self.feat_val .... 分割値
         let feat: &Vec<f64> = &x[self.feat_index];
         let val: f64 = self.feat_val;
         let (l, r) = self.make_split(feat, val);
@@ -237,13 +295,17 @@ impl DecisionTree {
         if (l.len() > 0) && (r.len() > 0) {
             let xl: U::Matrix = U::MatSelectRow(x, &l);
             let left = match self.left {
+                // self.leftはノード --> 再帰的にpredict()をコール
                 NodeType::Node(ref node) => { node.predict(&xl) },
+                // self.leftはリーフ（末端） --> 線形モデルで予測
                 NodeType::Leaf(ref leaf) => { leaf.predict(&xl, false) }
             };
 
             let xr: U::Matrix = U::MatSelectRow(x, &r);
             let right = match self.right {
+                // self.rightはノード --> 再帰的にpredict()をコール
                 NodeType::Node(ref node) => { node.predict(&xr) },
+                // self.rightはリーフ（末端） --> 線形モデルで予測
                 NodeType::Leaf(ref leaf) => { leaf.predict(&xr, false) }
             };
 

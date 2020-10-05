@@ -78,7 +78,7 @@ fn main() {
     }
     let filePath = &args[1];
 
-    let mut max_depth: u32 = 3; // default value
+    let mut max_depth: u32 = 3; // default depth
     if args.len()>2 {
         if &args[2] == "-d" {
             max_depth = args[3].parse::<u32>().unwrap();
