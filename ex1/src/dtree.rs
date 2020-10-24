@@ -186,6 +186,7 @@ impl DecisionTree {
     //
     //  self.feat_index 分割対象変数（の列番号）
     //  self.feat_val   分割の基準値
+    //  self.score      最良の分割点のスコア
     // ============================================================
     pub fn split_tree(&mut self, x: &U::Matrix, y: &U::Matrix) -> (Vec<usize>, Vec<usize>) {
         self.feat_index = 0;

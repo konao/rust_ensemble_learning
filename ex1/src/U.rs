@@ -117,7 +117,7 @@ impl CSV {
     // このCSVオブジェクトの一部の列からなる別のCSVオブジェクトを生成して返す
     //
     // (ex)
-    // let mut csv = utils::CSV::new();
+    // let mut csv = U::CSV::new();
     // csv.read(filePath);
     // let csv2 = csv.clonePartial(3, 5);  // 3列目、4列目をクローンして返す
     pub fn clonePartial(&self, startCol: usize, endCol: usize) -> Self {
