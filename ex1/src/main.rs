@@ -8,6 +8,8 @@
 
 use std::env;
 
+use std::time::{Duration, Instant}; // 経過時間測定用
+
 // 他のファイルで定義されている関数などを参照する方法：
 //
 // (1) main.rsから参照する場合
@@ -51,6 +53,8 @@ fn linearTest(x: &U::Matrix, y: &U::Matrix) {
 fn decisionTreeTest(x: &U::Matrix, y: &U::Matrix, max_depth: u32) {
     println!("max_depth={}", max_depth);
 
+    let start = Instant::now();
+
     let mut d = dtree::DecisionTree::new(1, max_depth);
 
     // モデル作成
@@ -59,9 +63,13 @@ fn decisionTreeTest(x: &U::Matrix, y: &U::Matrix, max_depth: u32) {
 
     // 予測
     let result = d.predict(&x);
+
+    let elapsed = start.elapsed();
+
     println!("*** DecisionTree output ***");
     println!("{:?}", result);
 
+    println!("{}.{:03}秒経過しました。", elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
     // U::stdev()のテスト
     // let v: &Vec<f64> = &x[0];
     // let sd = U::stdev(&v);
